@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 1
+names: ['pothole']
+
+roboflow:
+  workspace: yolo-2khre
+  project: pothole-sl4sr
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/yolo-2khre/pothole-sl4sr/dataset/1

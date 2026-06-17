@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Road Management</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<h1>🛣️ Road Management System</h1>
+
+<div class="top-bar">
+<button onclick="logout()" class="btn-logout" aria-label="Logout" title="Logout">🚪 Logout</button>
+</div>
+
+<!-- 🔥 AI DETECTION SECTION -->
+<div class="section section-detect center">
+
+  <h2>🤖 AI Road Detection</h2>
+
+  <input type="file" id="videoFile" accept="image/*,video/*">
+
+  <div class="btn-row">
+    <button class="btn-detect" onclick="uploadAndDetect()">📤 Upload & Detect</button>
+    <button class="btn-camera" onclick="openCamera()">📷 Open Camera</button>
+  </div>
+
+  <video id="camera" width="420" autoplay playsinline style="display:none;"></video>
+
+  <br>
+
+  <button id="captureBtn"
+          class="btn-capture"
+          onclick="capturePhoto()"
+          style="display:none;">
+    📸 Capture
+  </button>
+
+  <br><br>
+
+  <!-- ⚡ Default empty, will update only after detection -->
+  <div id="resultBox" class="resultBox"></div>
+
+  <span id="notifyBell" style="margin-left:15px;font-size:24px;display:none;">🔔</span>
+  <span id="detectStatus"></span>
+
+</div>
+
+<!-- ADD ROAD -->
+<div class="section section-add">
+<h2>➕ Add Road</h2>
+<input id="roadName" placeholder="Road Name">
+<input id="area" placeholder="Area">
+<input id="condition" placeholder="Condition (good/bad)">
+<button class="btn-add" onclick="addRoad()">Add Road</button>
+</div>
+
+<!-- REPORT ISSUE -->
+<div class="section section-report">
+<h2>🚨 Report Issue</h2>
+<input id="roadId" placeholder="Road ID">
+<input id="issueType" placeholder="Issue Type">
+<input id="severity" placeholder="Severity">
+<input id="desc" placeholder="Description">
+<button class="btn-report" onclick="reportIssue()">Report Issue</button>
+</div>
+
+<!-- ROAD LIST -->
+<div class="section section-list">
+<h2>📋 All Roads</h2>
+<ul id="roadsList"></ul>
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>

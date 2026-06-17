@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>User Login</title>
+<style>
+/* ----------------------- GLOBAL ----------------------- */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #0f172a;       /* Dark background */
+  color: #e5e7eb;            /* Light text */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  margin: 0;
+}
+
+/* ----------------------- LOGIN CARD ----------------------- */
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 40px 30px;
+  background: #020617;      /* Card background */
+  border-radius: 16px;
+  box-shadow: 0 16px 28px rgba(0,0,0,0.45);
+  text-align: center;
+}
+
+/* ----------------------- HEADINGS ----------------------- */
+h2 {
+  color: #38bdf8;
+  margin-bottom: 30px;
+}
+
+/* ----------------------- INPUTS ----------------------- */
+input[type="text"] {
+  width: 100%;
+  padding: 12px;
+  margin: 10px 0 18px 0;
+  border-radius: 10px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #e5e7eb;
+  font-size: 16px;
+}
+
+input[type="text"]:focus {
+  border-color: #38bdf8;
+  outline: none;
+}
+
+/* ----------------------- BUTTONS ----------------------- */
+button {
+  width: 100%;
+  padding: 12px;
+  margin-top: 10px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+
+button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 18px rgba(0,0,0,0.45);
+  opacity: 0.95;
+}
+
+#sendOtpBtn {
+  background: #38bdf8;
+  color: #020617;
+}
+
+#otpSection button {
+  background: #22c55e;
+  color: #020617;
+}
+
+/* ----------------------- OTP SECTION ----------------------- */
+#otpSection {
+  margin-top: 15px;
+}
+
+#otpSection input {
+  margin-bottom: 12px;
+}
+
+/* ----------------------- STATUS MESSAGE ----------------------- */
+#statusMsg {
+  font-weight: 500;
+  font-size: 14px;
+  margin-top: 12px;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<div class="login-card">
+  <h2>User Login</h2>
+
+  <input type="text" id="name" placeholder="Name"><br>
+  <input type="text" id="number" placeholder="Phone Number"><br>
+
+  <button id="sendOtpBtn" onclick="sendOtp()">Send OTP</button>
+
+  <div id="otpSection" style="display:none;">
+    <input type="text" id="otpInput" placeholder="Enter OTP"><br>
+    <button onclick="verifyOtp()">Verify OTP</button>
+  </div>
+
+  <div id="statusMsg"></div>
+</div>
+
+<script src="login.js"></script>
+
+</body>
+</html>

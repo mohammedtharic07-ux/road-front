@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Connection Test</title>
+<style>
+body { font-family: Arial; margin: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+.container { max-width: 600px; margin: 0 auto; background: rgba(0,0,0,0.3); padding: 30px; border-radius: 10px; }
+h1 { text-align: center; }
+.test { margin: 20px 0; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 5px; border-left: 4px solid #4CAF50; }
+.test.error { border-left-color: #f44336; }
+.test.pending { border-left-color: #ff9800; }
+.status { font-weight: bold; margin: 10px 0; }
+.ok { color: #4CAF50; }
+.error { color: #f44336; }
+button { padding: 12px 30px; font-size: 16px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 20px; }
+button:hover { background: #45a049; }
+code { background: rgba(0,0,0,0.5); padding: 5px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🔌 Backend Connection Test</h1>
+  
+  <div id="tests"></div>
+  
+  <button onclick="runTests()">🔄 Run Tests</button>
+</div>
+
+<script>
+const BACKEND_URL = "http://127.0.0.1:5000";
+
+async function runTests() {
+  const testsDiv = document.getElementById("tests");
+  testsDiv.innerHTML = "";
+  
+  console.log("Starting connection tests...");
+  
+  // Test 1: Ping backend
+  await addTest("Backend Health Check", async () => {
+    const res = await fetch(`${BACKEND_URL}/health`);
+    return res.status === 200 ? "OK" : `Status ${res.status}`;
+  });
+  
+  // Test 2: Send OTP
+  await addTest("Send OTP Endpoint", async () => {
+    const res = await fetch(`${BACKEND_URL}/send-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Test", number: "9999999999" })
+    });
+    return res.status === 200 ? "OK" : `Status ${res.status}`;
+  });
+  
+  // Test 3: File serving
+  await addTest("File Serving (/uploads/)", async () => {
+    const res = await fetch(`${BACKEND_URL}/uploads/test.jpg`);
+    return res.status === 404 ? "OK (404 expected for missing file)" : `Status ${res.status}`;
+  });
+  
+  // Test 4: CORS headers
+  await addTest("CORS Headers Present", async () => {
+    const res = await fetch(`${BACKEND_URL}/health`);
+    const corsHeader = res.headers.get("Access-Control-Allow-Origin");
+    return corsHeader ? `Found: ${corsHeader}` : "Missing CORS header";
+  });
+}
+
+async function addTest(name, testFn) {
+  const testsDiv = document.getElementById("tests");
+  const testEl = document.createElement("div");
+  testEl.className = "test pending";
+  testEl.innerHTML = `<strong>${name}</strong><div class="status">⏳ Testing...</div>`;
+  testsDiv.appendChild(testEl);
+  
+  try {
+    const result = await testFn();
+    testEl.innerHTML = `<strong>${name}</strong><div class="status ok">✅ ${result}</div>`;
+    testEl.className = "test";
+  } catch (err) {
+    testEl.innerHTML = `<strong>${name}</strong><div class="status error">❌ ${err.message}</div>`;
+    testEl.className = "test error";
+    console.error(`${name} failed:`, err);
+  }
+}
+
+// Auto-run on load
+window.addEventListener("load", runTests);
+
+console.log("Page loaded. Backend URL:", BACKEND_URL);
+</script>
+
+</body>
+</html>

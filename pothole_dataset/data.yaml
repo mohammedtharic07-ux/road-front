@@ -1,0 +1,191 @@
+import React, { useState, useRef, useEffect } from "react";
+import "./App.css";
+import * as faceapi from "face-api.js";
+
+function App() {
+  const [messages, setMessages] = useState([
+    { type: "bot", text: "Hello! Upload an image, type a message, or use camera to detect emotion." },
+  ]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [inputText, setInputText] = useState("");
+  const [language, setLanguage] = useState("en");
+  const fileInputRef = useRef();
+  const cameraRef = useRef();
+  const chatContainerRef = useRef();
+
+  // -------------------------------
+  // Load face-api models
+  // -------------------------------
+  useEffect(() => {
+    const loadModels = async () => {
+      await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+      await faceapi.nets.faceExpressionNet.loadFromUri("/models");
+    };
+    loadModels();
+  }, []);
+
+  // -------------------------------
+  // Auto-scroll
+  // -------------------------------
+  useEffect(() => {
+    chatContainerRef.current?.scrollTo({
+      top: chatContainerRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages]);
+
+  // -------------------------------
+  // Predict emotion from image
+  // -------------------------------
+  const predictEmotionFromImage = async (file) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = async () => {
+        const detection = await faceapi
+          .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+          .withFaceExpressions();
+        if (!detection) {
+          resolve({ text: "Unknown", emoji: "❓" });
+          return;
+        }
+        const expressions = detection.expressions;
+        const maxEmotion = Object.keys(expressions).reduce((a, b) =>
+          expressions[a] > expressions[b] ? a : b
+        );
+        const emojiMap = { happy: "😊", sad: "😢", angry: "😠", surprised: "😲", neutral: "😐" };
+        resolve({ text: maxEmotion.charAt(0).toUpperCase() + maxEmotion.slice(1), emoji: emojiMap[maxEmotion] });
+      };
+      img.onerror = () => reject("Image load failed");
+    });
+  };
+
+  // -------------------------------
+  // Predict emotion from text
+  // Replace this with your NLP model or backend
+  // -------------------------------
+  const predictEmotionFromText = async (text) => {
+    // Example placeholder (neutral)
+    return { text: "Neutral", emoji: "😐" };
+  };
+
+  // -------------------------------
+  // Translate text
+  // Uses MyMemory free API for demo purposes
+  // -------------------------------
+  const translateText = async (text, targetLang) => {
+    if (targetLang === "en") return text; // No translation for English
+    try {
+      const response = await fetch(
+        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
+          text
+        )}&langpair=en|${targetLang}`
+      );
+      const data = await response.json();
+      return data.responseData.translatedText;
+    } catch {
+      return text;
+    }
+  };
+
+  // -------------------------------
+  // HANDLERS
+  // -------------------------------
+  const handleFileChange = (e) => setSelectedFile(e.target.files[0]);
+
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+    const result = await predictEmotionFromImage(selectedFile);
+    const translated = await translateText(`Detected emotion: ${result.text} ${result.emoji}`, language);
+    setMessages((prev) => [
+      ...prev,
+      { type: "user", text: `Uploaded image`, file: URL.createObjectURL(selectedFile) },
+      { type: "bot", text: translated },
+    ]);
+  };
+
+  const handleCameraCapture = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      cameraRef.current.srcObject = stream;
+      cameraRef.current.play();
+
+      setTimeout(async () => {
+        const video = cameraRef.current;
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(async (blob) => {
+          const file = new File([blob], "camera.jpg", { type: "image/jpeg" });
+          const result = await predictEmotionFromImage(file);
+          const translated = await translateText(`Detected emotion: ${result.text} ${result.emoji}`, language);
+          setMessages((prev) => [
+            ...prev,
+            { type: "user", text: `Captured image`, file: URL.createObjectURL(file) },
+            { type: "bot", text: translated },
+          ]);
+          stream.getTracks().forEach((track) => track.stop());
+        });
+      }, 2000);
+    } catch (err) {
+      alert("Camera access denied or unavailable.");
+    }
+  };
+
+  const handleSendText = async () => {
+    if (!inputText) return;
+    const result = await predictEmotionFromText(inputText);
+    const translated = await translateText(`Detected emotion: ${result.text} ${result.emoji}`, language);
+    setMessages((prev) => [
+      ...prev,
+      { type: "user", text: inputText },
+      { type: "bot", text: translated },
+    ]);
+    setInputText("");
+  };
+
+  return (
+    <div className="app-container">
+      <div className="header">
+        <h2>Emotion Chat</h2>
+        <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+          <option value="en">English</option>
+          <option value="hi">Hindi</option>
+          <option value="zh">Chinese</option>
+          <option value="ja">Japanese</option>
+          <option value="ta">Tamil</option>
+          <option value="te">Telugu</option>
+          <option value="ml">Malayalam</option>
+        </select>
+      </div>
+
+      <div className="chat-container" ref={chatContainerRef}>
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`chat-message ${msg.type === "bot" ? "bot" : "user"}`}>
+            {msg.file && <img src={msg.file} alt="uploaded" className="chat-image" />}
+            <div className="message-text">{msg.text}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="input-area">
+        <input
+          type="text"
+          placeholder="Type a message"
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+        />
+        <button onClick={handleSendText}>Send</button>
+        <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} />
+        <button onClick={handleUpload}>Upload</button>
+        <button onClick={handleCameraCapture}>Camera</button>
+      </div>
+
+      <video ref={cameraRef} style={{ display: "none" }} />
+    </div>
+  );
+}
+
+export default App;

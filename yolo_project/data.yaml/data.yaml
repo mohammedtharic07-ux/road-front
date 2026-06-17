@@ -1,0 +1,7 @@
+path: D:/Tharic/project/dataset   # un dataset root folder path
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: pothole
