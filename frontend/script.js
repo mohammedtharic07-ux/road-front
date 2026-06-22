@@ -1,5 +1,9 @@
-// Use backend on port 5000 when frontend is on port 8000; otherwise use same origin
-const API = (location.port === '8000') ? 'http://127.0.0.1:5000' : location.origin;
+// API URL selection: localhost for dev, Render backend for production
+const API =
+  location.hostname === 'localhost' ||
+  location.hostname === '127.0.0.1'
+  ? 'http://127.0.0.1:5000'
+  : 'https://road-front.onrender.com';
 
 let isAdmin = false;
 

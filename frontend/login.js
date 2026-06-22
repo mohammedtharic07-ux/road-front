@@ -1,6 +1,9 @@
-// Local development backend URL. In production, set window.BACKEND_URL to your Render backend URL.
-const LOCAL_API_URL = 'http://127.0.0.1:5000';
-const API = window.BACKEND_URL || LOCAL_API_URL;
+// API URL selection: localhost for dev, Render backend for production
+const API =
+  location.hostname === 'localhost' ||
+  location.hostname === '127.0.0.1'
+  ? 'http://127.0.0.1:5000'
+  : 'https://road-front.onrender.com';
 
 console.log("🚀 Login page loaded. API URL:", API);
 
