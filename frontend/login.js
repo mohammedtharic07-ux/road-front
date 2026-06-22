@@ -1,28 +1,27 @@
-// If the frontend is served from the static dev server (port 8000),
-// call the backend at port 5000. Otherwise use the current origin
-// so serving via Flask (same origin) works transparently.
-const API = (location.port === '8000') ? 'http://127.0.0.1:5000' : location.origin;
+// Local development backend URL. In production, set window.BACKEND_URL to your Render backend URL.
+const LOCAL_API_URL = 'http://127.0.0.1:5000';
+const API = window.BACKEND_URL || LOCAL_API_URL;
 
 console.log("🚀 Login page loaded. API URL:", API);
 
 async function sendOtp() {
   const name = document.getElementById("name").value.trim();
-  const number = document.getElementById("number").value.trim();
+  const email = document.getElementById("email").value.trim();
   const statusMsg = document.getElementById("statusMsg");
 
-  if(!name || !number){
-    alert("Enter name and phone number");
+  if(!name || !email){
+    alert("Enter name and email");
     return;
   }
 
-  console.log("📤 Sending OTP for:", name, number);
+  console.log("📤 Sending OTP for:", name, email);
 
   try{
     const res = await fetch(`${API}/send-otp`,{
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       credentials:"include",
-      body: JSON.stringify({ name, number })
+      body: JSON.stringify({ name, email })
     });
     
     console.log("📨 Response status:", res.status);
@@ -31,10 +30,7 @@ async function sendOtp() {
 
     if(res.ok){
       statusMsg.style.color = "green";
-      let message = " OTP sent successfully! ";
-
-      // Frontend will not show OTP, terminal will display
-      message += "Check Flask terminal for the OTP code.";
+      let message = "OTP sent successfully. Check your email inbox.";
 
       statusMsg.innerHTML = message;
 
@@ -42,8 +38,8 @@ async function sendOtp() {
       document.getElementById("otpSection").style.display = "block";
       document.getElementById("sendOtpBtn").disabled = true;
 
-      // Save number for verify
-      document.getElementById("otpSection").dataset.number = number;
+      // Save email for verify
+      document.getElementById("otpSection").dataset.email = email;
 
     }else{
       statusMsg.style.color = "red";
@@ -59,7 +55,7 @@ async function sendOtp() {
 }
 
 async function verifyOtp(){
-  const number = document.getElementById("otpSection").dataset.number;
+  const email = document.getElementById("otpSection").dataset.email;
   const otp = document.getElementById("otpInput").value.trim();
   const statusMsg = document.getElementById("statusMsg");
 
@@ -73,7 +69,7 @@ async function verifyOtp(){
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       credentials:"include",
-      body: JSON.stringify({ number, otp })
+      body: JSON.stringify({ email, otp })
     });
 
     const data = await res.json();

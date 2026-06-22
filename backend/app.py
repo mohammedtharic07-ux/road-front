@@ -9,6 +9,11 @@ from datetime import datetime, timedelta
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
 from detect import detect_pothole
+import smtplib
+from email.message import EmailMessage
+from dotenv import load_dotenv
+
+load_dotenv()
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".jfif"}
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv"}
@@ -27,12 +32,22 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ---------------- CONFIG ---------------- #
-app.secret_key = "supersecretkey123"
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
 
-# CORS configuration for cross-origin requests (port 8000 frontend to port 5000 backend)
-CORS(app, 
+allowed_origins = [
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:5000",
+    "http://localhost:8000",
+    "http://localhost:5000",
+]
+netlify_frontend = os.environ.get("FRONTEND_URL")
+if netlify_frontend:
+    allowed_origins += [origin.strip() for origin in netlify_frontend.split(",") if origin.strip()]
+
+# CORS configuration for cross-origin requests
+CORS(app,
      resources={r"/*": {
-         "origins": ["http://127.0.0.1:8000", "http://127.0.0.1:5000", "http://localhost:8000", "http://localhost:5000"],
+         "origins": allowed_origins,
          "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
          "allow_headers": ["Content-Type", "Authorization"],
          "supports_credentials": True,
@@ -54,7 +69,12 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 # MongoDB
-app.config["MONGO_URI"] = "mongodb://127.0.0.1:27017/road_management"
+mongo_uri = os.environ.get("MONGO_URI", "mongodb://127.0.0.1:27017/road_management")
+print("MONGO_URI =", os.getenv("MONGO_URI"))
+if not isinstance(mongo_uri, str) or not mongo_uri.startswith(("mongodb://", "mongodb+srv://")):
+    print("Invalid MONGO_URI detected. Falling back to default mongodb://127.0.0.1:27017/road_management")
+    mongo_uri = "mongodb://127.0.0.1:27017/road_management"
+app.config["MONGO_URI"] = mongo_uri
 mongo.init_app(app)
 
 # Register routes
@@ -76,14 +96,11 @@ def serve_upload(filename):
 @app.after_request
 def add_cors_headers(response):
     origin = request.headers.get('Origin')
-    allowed_origins = ['http://127.0.0.1:8000', 'http://127.0.0.1:5000', 'http://localhost:8000', 'http://localhost:5000']
-    
     if origin in allowed_origins:
         response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, DELETE, PUT'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         response.headers['Access-Control-Allow-Credentials'] = 'true'
-    
     return response
 
 # ---------------- BASIC ROUTES ---------------- #
@@ -107,120 +124,100 @@ def health():
 @app.route("/send-otp", methods=["POST"])
 def send_otp():
     timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
-    print(f"REQUEST RECEIVED: /send-otp [{timestamp}]", flush=True)
     data = request.get_json(silent=True) or {}
-    print(f"Request body: {data}", flush=True)
 
     name = data.get("name")
-    number = data.get("number")
-    if not name or not number:
-        error_response = {"error": "Name and number required"}
-        print(f"REQUEST ERROR: missing name or number -> {error_response}", flush=True)
+    email = data.get("email")
+    if not name or not email:
+        error_response = {"error": "Name and email required"}
+        logger.warning("send-otp validation failed: %s", error_response)
         return jsonify(error_response), 400
 
     otp = str(random.randint(1000, 9999))
     try:
-        delete_result = mongo.db.otp_sessions.delete_many({"number": number})
+        mongo.db.otp_sessions.delete_many({"email": email})
         insert_result = mongo.db.otp_sessions.insert_one({
             "name": name,
-            "number": number,
+            "email": email,
             "otp": otp,
             "expires_at": datetime.utcnow() + timedelta(minutes=5)
         })
     except Exception as e:
         error_response = {"error": "Database write failed", "details": str(e)}
-        print(f"DATABASE ERROR: {e}", flush=True)
         logger.exception("send-otp database error")
         return jsonify(error_response), 500
 
-    print("\n" + "="*60, flush=True)
-    print(f"TIMESTAMP: {timestamp}", flush=True)
-    print(f"PHONE NUMBER: {number}", flush=True)
-    print(f"GENERATED OTP: {otp}", flush=True)
-    print(f"MongoDB insert id: {insert_result.inserted_id}", flush=True)
-    print("="*60 + "\n", flush=True)
+    # Send OTP via Gmail SMTP
+    email_user = os.environ.get("EMAIL_USER")
+    email_password = os.environ.get("EMAIL_PASSWORD")
+    if not email_user or not email_password:
+        logger.error("Email credentials not configured in environment variables")
+        return jsonify({"error": "Email server not configured"}), 500
 
-    otp_log_file = os.path.join(os.path.dirname(__file__), "otp_log.txt")
+    msg = EmailMessage()
+    msg["Subject"] = "Your OTP Code"
+    msg["From"] = email_user
+    msg["To"] = email
+    msg.set_content(f"Hello {name},\n\nYour OTP code is: {otp}\nThis code will expire in 5 minutes.\n\nIf you did not request this, please ignore this email.\n")
+
     try:
-        with open(otp_log_file, "a") as f:
-            f.write(f"\n[{timestamp}]\n")
-            f.write(f"Name: {name}\n")
-            f.write(f"Number: {number}\n")
-            f.write(f"OTP: {otp}\n")
-            f.write(f"Expires: {(datetime.utcnow() + timedelta(minutes=5)).strftime('%H:%M:%S')}\n")
-            f.write("-" * 40 + "\n")
+        with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.login(email_user, email_password)
+            smtp.send_message(msg)
     except Exception as e:
-        logger.exception("Failed to write OTP log file")
-        print(f"OTP log write error: {e}", flush=True)
+        logger.exception("Failed to send OTP email")
+        return jsonify({"error": "Failed to send OTP email", "details": str(e)}), 500
 
-    response = {"message": "OTP Sent Successfully - Check terminal and otp_log.txt file"}
-    print(f"Response returned: {response}", flush=True)
-    logger.info("send-otp completed for %s", number)
-    return jsonify(response)
+    logger.info("send-otp completed for %s (db id: %s)", email, getattr(insert_result, 'inserted_id', None))
+    return jsonify({"message": "OTP sent successfully. Check your email inbox."})
 
 @app.route("/verify-otp", methods=["POST"])
 def verify_otp():
-    timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
     data = request.get_json(silent=True) or {}
-    number = data.get("number")
+    email = data.get("email")
     otp = data.get("otp")
 
-    print(f"REQUEST RECEIVED: /verify-otp [{timestamp}]", flush=True)
-    print(f"Verifying OTP for number: {number}, otp: {otp}", flush=True)
+    logger.info("REQUEST RECEIVED: /verify-otp for %s", email)
 
-    if not number or not otp:
-        error_response = {"error": "Number and OTP required"}
-        print(f"REQUEST ERROR: missing number or otp -> {error_response}", flush=True)
+    if not email or not otp:
+        error_response = {"error": "Email and OTP required"}
         logger.warning("verify-otp validation failed: %s", error_response)
         return jsonify(error_response), 400
 
     try:
-        all_records = list(mongo.db.otp_sessions.find({"number": number}))
-        print(f"   Found {len(all_records)} record(s) with this number in DB", flush=True)
-        for rec in all_records:
-            print(f"   DB record - OTP: {rec.get('otp')} (type: {type(rec.get('otp'))}), expires_at: {rec.get('expires_at')}", flush=True)
-
-        record = mongo.db.otp_sessions.find_one({"number": number, "otp": otp})
+        all_records = list(mongo.db.otp_sessions.find({"email": email}))
+        logger.info("Found %s OTP record(s) for email", len(all_records))
+        record = mongo.db.otp_sessions.find_one({"email": email, "otp": otp})
     except Exception as e:
         logger.exception("verify-otp database error")
-        error_response = {"error": "Database read failed", "details": str(e)}
-        print(f"DATABASE ERROR: {e}", flush=True)
-        return jsonify(error_response), 500
+        return jsonify({"error": "Database read failed", "details": str(e)}), 500
 
     if not record:
-        print(f"   ❌ No matching record found!", flush=True)
         return jsonify({"error": "Invalid OTP"}), 400
 
-    print(f"   ✅ OTP matched!", flush=True)
-
     if record["expires_at"] < datetime.utcnow():
-        print(f"   ❌ OTP expired at {record['expires_at']}", flush=True)
         return jsonify({"error": "OTP Expired"}), 400
 
-    print(f"   ✅ OTP valid, creating user session", flush=True)
-
     try:
-        user = mongo.db.users.find_one({"number": number})
+        user = mongo.db.users.find_one({"email": email})
         if not user:
             mongo.db.users.insert_one({
-                "name": record["name"],
-                "number": number,
+                "name": record.get("name"),
+                "email": email,
                 "verified": True,
                 "createdAt": datetime.utcnow()
             })
     except Exception as e:
         logger.exception("verify-otp failed to create user")
-        error_response = {"error": "User creation failed", "details": str(e)}
-        print(f"USER CREATION ERROR: {e}", flush=True)
-        return jsonify(error_response), 500
+        return jsonify({"error": "User creation failed", "details": str(e)}), 500
 
     session.permanent = True
     session["role"] = "user"
-    session["number"] = number
-    response = {"message": "Login Successful"}
-    print(f"Response returned: {response}", flush=True)
-    logger.info("verify-otp succeeded for %s", number)
-    return jsonify(response)
+    session["email"] = email
+    logger.info("verify-otp succeeded for %s", email)
+    return jsonify({"message": "Login Successful"})
 
 @app.route("/admin-login", methods=["POST"])
 def admin_login():

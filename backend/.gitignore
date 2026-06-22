@@ -1,0 +1,6 @@
+.env
+otp_log.txt
+__pycache__/
+*.pyc
+.venv/
+uploads/
